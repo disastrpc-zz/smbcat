@@ -6,7 +6,7 @@ Future features:
   - SID cycling
   - NT and NTML dumps
   - LSAD SID cycling
-  
+```  
 Usage:
      smbcat <options> <host:port>
 
@@ -22,3 +22,4 @@ Options:
 
 Examples:
     smbcat -m dict -v -U /root/users.txt 10.1.5.10:135
+```
