@@ -11,7 +11,7 @@ Usage:
 
 Options:
     -m  --mode  <string>        =>  Specify the mode the program will use. Modes are:
-                                    'dict'  => Dictionary attack. Must provie username list.
+                                    'dict'  => Dictionary attack. Must provide username list.
                                     'cycle' => Cycle user RIDs. You can specifiy a max count
                                                to cycle on. Default is 10,000.
     -U  --users <path>          =>  Specify user list
