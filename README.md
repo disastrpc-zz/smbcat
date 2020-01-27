@@ -1,6 +1,5 @@
 # smbcat
-smbcat (or smbcataloguer) is a Domain Services enumeration tool inspired by [enum4linux](https://github.com/portcullislabs/enum4linux) and built around the [impacket](https://github.com/SecureAuthCorp/impacket/) package. While still in development it is capable of enumerating users through a NULL session and retrieving some DC information.
-
+smbcat (or smbcataloguer) is a Domain Services enumeration tool inspired by [enum4linux](https://github.com/portcullislabs/enum4linux) and built around the [impacket](https://github.com/SecureAuthCorp/impacket/) package. While still in development, it is capable of enumerating domain information by wrapping around tools like rpcclient and smbclient, or directly calling remote discovery functions through DCE/RPC (LSAD, LSAT, and SAMR will be added in future releases).
 
 Future features:
   - SID cycling
@@ -12,7 +11,7 @@ Usage:
 
 Options:
     -m  --mode  <string>        =>  Specify the mode the program will use. Modes are:
-                                    'dict'  => Dictionary attack. Must provie username list.
+                                    'dict'  => Dictionary attack. Must provide username list.
                                     'cycle' => Cycle user RIDs. You can specifiy a max count
                                                to cycle on. Default is 10,000.
     -U  --users <path>          =>  Specify user list
