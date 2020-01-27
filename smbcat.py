@@ -108,6 +108,43 @@ class TransportHandlerFactory:
         except Exception as _except:
             stderr.write(f"[-] {_except}\n")
 
+class LibrarianTaskDaemonizer:
+
+        def __init__(self, name, func, max_subproc, args=[], kwargs={}, daemonize=True):
+            self.__name = name
+            self.__func = func
+            self.__args = args
+            self.__kwargs = kwargs
+            self.__max_subproc = max_subproc
+            self.__daemonize = daemonize
+            self.__daemons = []
+            self.__daemon = None
+
+            if self.__daemonize:
+                TM = 'daemon'
+            if not self.__daemonize:
+                TM = 'thread'
+
+        def spawn(self):
+            # spawn daemons
+            for i in range(self.__max_subproc):
+
+                self.__daemon = threading.Thread(name=self.__name, 
+                                            target=self.__func, 
+                                            args=(self.__args,), 
+                                            kwargs=dict(self.__kwargs), 
+                                            daemon=self.__daemonize)
+
+                self.__daemons.append(self.__daemon)
+                self.__daemon.start()
+                stdout.write(f"[*] Started daemon: {self.__name}\n")
+
+                self._join()
+
+        def join(self):  
+            for i, thread in enumerate(self.__daemons):
+                thread.join()
+        
 
 
 class Librarian:
@@ -120,6 +157,7 @@ class Librarian:
         self.__dce_handler = dce_handler     
         self.__domain_name = '' 
         self.__verb = verb
+        self.__daemonizer = None
 
     # takes binded instance of a TransportHandler using the samr bind string
     # def samr_dump(self):
@@ -164,7 +202,7 @@ class Librarian:
     def rid_cycle(self, host):
         pass
     
-    def spawn_rid_cycle_daemons(self, host, verb=False, MAX=10000, max_daemons=4):
+    def rid_cycle_slr(self, host, verb=False, MIN=0, MAX=10000, max_subproc=4, daemonize=True):
 
         DEFAULT_USERS = ["Administrator",
                     "Guest",
@@ -178,16 +216,30 @@ class Librarian:
                     "guest",
                     "administrator"]
 
+        stop_const = int(MAX / max_subproc)
+        start = 0
+        stop = stop_const
+
+        @staticmethod
+        def daemonize_func(name, func, max_subproc, args=[], kwargs={}):
+            daemonizer = LibrarianTaskDaemonizer(name, func, max_subproc, args, kwargs)
+            return 
+
         def cycle(host, start, stop): 
             matches = {}
+            thread_name = host + '-daemon'
+            dargs = [host, MIN, MAX]
+            self.daemonize.func(thread_name, cycle, max_subproc, dargs)
             for i in range(start, stop):
                 try:
                     HEX = hex(i)
                     if self.__verb:
                         thread_name = threading.currentThread().getName()
                         stdout.write(f"[*] Cycling {HEX} curr:{i}\\start:{start}\\stop:{stop} | {thread_name}\n")
+
                     args = fr"rpcclient -W='' -U='' -N -c 'samlookuprids domain {HEX}' {host}"
-                    resp = subprocess.check_output(shlex.split(args)).decode('utf-8')       
+                    resp = subprocess.check_output(shlex.split(args)).decode('utf-8')   
+
                     _resp = resp.split(" ")
                     matches[HEX] = _resp[2]
                     stdout.write(f"[+] Name: {_resp[2]} RID: {HEX}\n")
@@ -198,24 +250,6 @@ class Librarian:
             stdout.write("[*] RID matches:\n")
             for key in matches.keys(): 
                 stdout.write(f"[*] RID: {key} Name: {matches[key]}")
-
-        daemons = []
-        stop_const = int(MAX / max_daemons)
-        start = 0
-        stop = stop_const
-
-        stdout.write(f"[*] Starting cycling with {MAX} daemon(s)\n")
-            
-        for i in range(max_daemons):
-            daemon = threading.Thread(target=cycle, args=(host,start,stop, ), daemon=True)
-            daemons.append(daemon)
-            daemon.start()
-            stdout.write(f"[*] Started daemon {i}\n")
-            start = stop
-            stop += stop_const
-            
-        for i, thread in enumerate(daemons):
-            thread.join()
 
         # try:
         #response = lsad.hLsarOpenPolicy2(self.__dce_handler, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES, '80000000L')
