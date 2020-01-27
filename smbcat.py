@@ -177,17 +177,20 @@ class Librarian:
                     "admin",
                     "guest",
                     "administrator"]
-        i = 0
+        i = 450
         while i <= MAX:
 
-            if self.__verb:
-                stdout.write(f"[*] Attempting guess with 'samlookup' and '{HEX}'\n")
             try:
                 HEX = hex(i)
-                print(HEX, i)
+                if self.__verb:
+                    stdout.write(f"[*] Attempting guess with 'samlookup' and '{HEX}'\n")
                 args = fr"rpcclient -W='' -U='' -N -c 'samlookuprids domain {HEX}' {host}"
-                RID = subprocess.check_output(shlex.split(args)).encode('utf-8')
-                print(RID)
+                RID = subprocess.check_output(shlex.split(args))
+
+                if 'status 1' in RID.encode('utf-8'):
+                    pass
+                else:
+                    print(RID)
 
             except subprocess.CalledProcessError as e:
                 stderr.write(f"{e}\n")

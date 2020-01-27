@@ -1,0 +1,2 @@
+# smbdig
+Domain enumeration tool
