@@ -12,7 +12,7 @@
 
 VERSION = '1.0.0'
 
-import shlex, subprocess, click
+import shlex, subprocess, click, threading, re
 from sys import stdout, stderr, argv
 from contextlib import redirect_stdout
 from impacket.dcerpc.v5 import transport, lsat, lsad, samr
@@ -164,7 +164,7 @@ class Librarian:
     def rid_cycle(self, host):
         pass
     
-    def sam_rid_cycle(self, host, MAX=10000):
+    def spawn_rid_cycle_daemons(self, host, verb=False, MAX=10000, max_daemons=4):
 
         DEFAULT_USERS = ["Administrator",
                     "Guest",
@@ -177,26 +177,45 @@ class Librarian:
                     "admin",
                     "guest",
                     "administrator"]
-        i = 450
-        while i <= MAX:
 
-            try:
-                HEX = hex(i)
-                if self.__verb:
-                    stdout.write(f"[*] Attempting guess with 'samlookup' and '{HEX}'\n")
-                args = fr"rpcclient -W='' -U='' -N -c 'samlookuprids domain {HEX}' {host}"
-                RID = subprocess.check_output(shlex.split(args))
-
-                if 'status 1' in RID.encode('utf-8'):
+        def cycle(host, start, stop): 
+            matches = {}
+            for i in range(start, stop):
+                try:
+                    HEX = hex(i)
+                    if self.__verb:
+                        thread_name = threading.currentThread().getName()
+                        stdout.write(f"[*] Cycling {HEX} curr:{i}\\start:{start}\\stop:{stop} | {thread_name}\n")
+                    args = fr"rpcclient -W='' -U='' -N -c 'samlookuprids domain {HEX}' {host}"
+                    resp = subprocess.check_output(shlex.split(args)).decode('utf-8')       
+                    _resp = resp.split(" ")
+                    matches[HEX] = _resp[2]
+                    stdout.write(f"[+] Name: {_resp[2]} RID: {HEX}\n")
+                except:
                     pass
-                else:
-                    print(RID)
+                finally: i+=1
+                
+            stdout.write("[*] RID matches:\n")
+            for key in matches.keys(): 
+                stdout.write(f"[*] RID: {key} Name: {matches[key]}")
 
-            except subprocess.CalledProcessError as e:
-                stderr.write(f"{e}\n")
-            finally: i+=1
+        daemons = []
+        stop_const = int(MAX / max_daemons)
+        start = 0
+        stop = stop_const
 
-        
+        stdout.write(f"[*] Starting cycling with {MAX} daemon(s)\n")
+            
+        for i in range(max_daemons):
+            daemon = threading.Thread(target=cycle, args=(host,start,stop, ), daemon=True)
+            daemons.append(daemon)
+            daemon.start()
+            stdout.write(f"[*] Started daemon {i}\n")
+            start = stop
+            stop += stop_const
+            
+        for i, thread in enumerate(daemons):
+            thread.join()
 
         # try:
         #response = lsad.hLsarOpenPolicy2(self.__dce_handler, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES, '80000000L')
@@ -285,8 +304,8 @@ Examples:
                 # handler = TransportHandlerFactory(host, port, bind_str=4, verb=verb)
                 # handler.connect()
                 # dce_handler = handler.bind(bind='samr')
-                librarian = Librarian()
-                librarian.sam_rid_cycle(host)
+                librarian = Librarian(verb=True)
+                librarian.spawn_rid_cycle_daemons(host)
             else:
                 stderr.write("No user list found\n")
         main()
