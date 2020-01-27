@@ -1,2 +1,2 @@
-# smbdig
+# smbcat
 Domain enumeration tool
