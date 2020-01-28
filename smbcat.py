@@ -139,14 +139,12 @@ class LibrarianTaskDaemonizer:
                 self.__daemon.start()
                 stdout.write(f"[*] Started daemon: {self.__name}\n")
 
-                self._join()
+            return self.__daemons
 
         def join(self):  
             for i, thread in enumerate(self.__daemons):
                 thread.join()
         
-
-
 class Librarian:
 
     ACCESS_MASK_DEF = '0x00000800'
@@ -217,44 +215,35 @@ class Librarian:
                     "administrator"]
 
         stop_const = int(MAX / max_subproc)
-        start = 0
-        stop = stop_const
+        start = MIN
+        stop = stop_const 
+        matches = {}
+        thread_name = host + '-daemon'
+        for i in range(start, stop):
+            try:
+                HEX = hex(i)
+                if self.__verb:
+                    thread_name = threading.currentThread().getName()
+                    stdout.write(f"[*] Cycling {HEX} curr:{i}\\start:{start}\\stop:{stop} | {thread_name}\n")
 
-        @staticmethod
-        def daemonize_func(name, func, max_subproc, args=[], kwargs={}):
-            daemonizer = LibrarianTaskDaemonizer(name, func, max_subproc, args, kwargs)
-            return 
+                args = fr"rpcclient -W='' -U='' -N -c 'samlookuprids domain {HEX}' {host}"
+                resp = subprocess.check_output(shlex.split(args)).decode('utf-8')   
 
-        def cycle(host, start, stop): 
-            matches = {}
-            thread_name = host + '-daemon'
-            dargs = [host, MIN, MAX]
-            self.daemonize.func(thread_name, cycle, max_subproc, dargs)
-            for i in range(start, stop):
-                try:
-                    HEX = hex(i)
-                    if self.__verb:
-                        thread_name = threading.currentThread().getName()
-                        stdout.write(f"[*] Cycling {HEX} curr:{i}\\start:{start}\\stop:{stop} | {thread_name}\n")
-
-                    args = fr"rpcclient -W='' -U='' -N -c 'samlookuprids domain {HEX}' {host}"
-                    resp = subprocess.check_output(shlex.split(args)).decode('utf-8')   
-
-                    _resp = resp.split(" ")
-                    matches[HEX] = _resp[2]
-                    stdout.write(f"[+] Name: {_resp[2]} RID: {HEX}\n")
-                except:
-                    pass
-                finally: i+=1
-                
-            stdout.write("[*] RID matches:\n")
-            for key in matches.keys(): 
-                stdout.write(f"[*] RID: {key} Name: {matches[key]}")
-
-        # try:
-        #response = lsad.hLsarOpenPolicy2(self.__dce_handler, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES, '80000000L')
-        # except DCERPCException:
-        #     stderr.write("[-] ACCESS_DENIED\n")
+                _resp = resp.split(" ")
+                matches[HEX] = _resp[2]
+                stdout.write(f"[+] Name: {_resp[2]} RID: {HEX}\n")
+            except:
+                pass
+            finally: i+=1
+            
+        stdout.write("[*] RID matches:\n")
+        for key in matches.keys(): 
+            stdout.write(f"[*] RID: {key} Name: {matches[key]}")
+    
+    # try:
+    #response = lsad.hLsarOpenPolicy2(self.__dce_handler, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES, '80000000L')
+    # except DCERPCException:
+    #     stderr.write("[-] ACCESS_DENIED\n")
 
 if __name__ == "__main__":
 
@@ -339,7 +328,9 @@ Examples:
                 # handler.connect()
                 # dce_handler = handler.bind(bind='samr')
                 librarian = Librarian(verb=True)
-                librarian.spawn_rid_cycle_daemons(host)
+                daemonizer = LibrarianTaskDaemonizer(host, librarian.rid_cycle_slr, 4, host)
+                daemonizer.spawn()
+                daemonizer.join()
             else:
                 stderr.write("No user list found\n")
         main()
