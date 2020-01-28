@@ -3,7 +3,7 @@ smbcat (or smbcataloguer) is a Domain Services enumeration tool inspired by [enu
 
 Future features:
   - SID cycling
-  - NT and NTML dumps
+  - NT and NTLM password dumps
   - LSAD SID cycling
 ```  
 Usage:
