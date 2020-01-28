@@ -125,7 +125,11 @@ class LibrarianTaskDaemonizer:
             if not self.__daemonize:
                 TM = 'thread'
 
-        def spawn(self):
+        def spawn_bulk(self):
+
+            if self.__args and self.__kwargs:
+                stderr.write("[-] Error: Cannot provide args and kwargs together")
+                
             # spawn daemons
             for i in range(self.__max_subproc):
 
@@ -137,9 +141,20 @@ class LibrarianTaskDaemonizer:
 
                 self.__daemons.append(self.__daemon)
                 self.__daemon.start()
-                stdout.write(f"[*] Started daemon: {self.__name}\n")
+                stdout.write(f"[*] Started daemon in batch: {self.__name}\n")
 
             return self.__daemons
+        
+        def spawn_single(self):
+            self.__daemon = threading.Thread(name=self.__name,
+                                            target=self.__func,
+                                            args=dict(self.__kwargs),
+                                            daemon=self.__daemon)
+
+            self.__daemons.append(self.__daemon)
+            self.__daemon.start()
+            stdout.write(f"[*] Started daemon {self.__name}\n")
+
 
         def join(self):  
             for i, thread in enumerate(self.__daemons):
@@ -170,6 +185,7 @@ class Librarian:
             'smbclient': fr"smbclient -W='' //{host}/ipc$ -U='' -c 'q' 2>&1"
         }
 
+        stdout.write("[*] Attempting LSA query on {host}")
         # get domain name and SID
         out = subprocess.check_output(shlex.split(args['lsaquery'])).decode('utf-8').split('\n')
         self.__domain_name = out[0].split(':')
@@ -214,17 +230,14 @@ class Librarian:
                     "guest",
                     "administrator"]
 
-        stop_const = int(MAX / max_subproc)
-        start = MIN
-        stop = stop_const 
+
         matches = {}
-        thread_name = host + '-daemon'
-        for i in range(start, stop):
+        for i in range(MIN, MAX):
             try:
                 HEX = hex(i)
                 if self.__verb:
                     thread_name = threading.currentThread().getName()
-                    stdout.write(f"[*] Cycling {HEX} curr:{i}\\start:{start}\\stop:{stop} | {thread_name}\n")
+                    stdout.write(f"[*] Cycling {HEX} curr:{i}\\start:{MIN}\\stop:{MAX} | {thread_name}\n")
 
                 args = fr"rpcclient -W='' -U='' -N -c 'samlookuprids domain {HEX}' {host}"
                 resp = subprocess.check_output(shlex.split(args)).decode('utf-8')   
@@ -234,7 +247,8 @@ class Librarian:
                 stdout.write(f"[+] Name: {_resp[2]} RID: {HEX}\n")
             except:
                 pass
-            finally: i+=1
+            finally: 
+                i+=1
             
         stdout.write("[*] RID matches:\n")
         for key in matches.keys(): 
@@ -268,7 +282,7 @@ SMB enumeration tool built around the impacket package.
 Options:
     -m  --mode  <string>        =>  Specify the mode the program will use. Modes are:
                                     'dict'  => Dictionary attack. Must provie username list.
-                                    'cycle' => Cycle user RIDs. You can specifiy a max count
+                                    'cycle' => Cycle domain RIDs. You can specifiy a max count
                                                to cycle on. Default is 10,000.
     -U  --users <path>          =>  Specify user list
     -u  --user  <string>        =>  Specify a user
@@ -287,9 +301,20 @@ Examples:
         @click.option('-U','--user-list', 'userlist')
         @click.option('-u','--user')
         @click.option('-v','--verbose', 'verb', count=True)
+        @click.option('--daemons', type=click.INT)
+        @click.option('--start-rid-cycle', 'rid_start', type=click.INT, default=0)
+        @click.option('--stop-rid-cycle', 'rid_stop', type=click.INT, default=10000)
         @click.option('--hash-dump', 'hashdump', count=True)
         @click.argument('target_host')
-        def main(mode='', userlist='', user='', verb=False, hashdump=False, target_host=''):
+        def main(mode='', 
+                userlist='', 
+                user='', 
+                verb=False, 
+                daemons=1, 
+                rid_start=0,
+                rid_stop=10000,
+                hashdump=False, 
+                target_host=''):
 
             show_banner()
 
@@ -328,7 +353,12 @@ Examples:
                 # handler.connect()
                 # dce_handler = handler.bind(bind='samr')
                 librarian = Librarian(verb=True)
-                daemonizer = LibrarianTaskDaemonizer(host, librarian.rid_cycle_slr, 4, host)
+                thread_name = host + '-daemon'
+                rid_start, rid_stop = 0, 0
+                stop_const = rip_stop / daemons
+                for range(0, daemons):
+                    start = 
+                daemonizer = LibrarianTaskDaemonizer(thread_name, librarian.rid_cycle_slr, daemons, [host])
                 daemonizer.spawn()
                 daemonizer.join()
             else:
