@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# smbdig - ver 1.0
+# smbcat - ver 1.1.2
 # by disastrpc @ github.com/disastrpc
 # GNU General Public License Ver 3
 # Tool for domain enumeration using RPC and lsat.
@@ -10,7 +10,7 @@
 # of any actions taken while using this software. The author accepts no liability for 
 # damage caused by this tool. 
 
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 
 import shlex, subprocess, click, threading, re
 from sys import stdout, stderr, argv
