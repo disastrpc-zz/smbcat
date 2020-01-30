@@ -94,7 +94,6 @@ class TransportHandlerFactory:
             elif self.__bind == 'samr':
                 self.__dce.bind(samr.MSRPC_UUID_SAMR)
                 handle = samr.hSamrOpenDomain(self.__dce, self.__trans)
-                print(handle)
             
             elif self.__bind == 'smb':
                 self.__dce.bind()
@@ -132,11 +131,9 @@ class LibrarianTaskDaemonizer:
                 
             # spawn daemons
             for i in range(self.__max_subproc):
-
                 self.__daemon = threading.Thread(name=self.__name, 
                                             target=self.__func, 
                                             args=(self.__args,), 
-                                            kwargs=dict(self.__kwargs), 
                                             daemon=self.__daemonize)
 
                 self.__daemons.append(self.__daemon)
@@ -145,18 +142,20 @@ class LibrarianTaskDaemonizer:
 
             return self.__daemons
         
-        def spawn_single(self):
+        def spawn(self):
+            
             self.__daemon = threading.Thread(name=self.__name,
                                             target=self.__func,
-                                            args=dict(self.__kwargs),
+                                            args=self.__args,
                                             daemon=self.__daemon)
-
-            self.__daemons.append(self.__daemon)
-            self.__daemon.start()
             stdout.write(f"[*] Started daemon {self.__name}\n")
+            return self.__daemon.start()
 
 
-        def join(self):  
+        def join(self, daemons=None): 
+            if not daemons is None:
+                 self.__daemons = daemons
+
             for i, thread in enumerate(self.__daemons):
                 thread.join()
         
@@ -216,7 +215,7 @@ class Librarian:
     def rid_cycle(self, host):
         pass
     
-    def rid_cycle_slr(self, host, verb=False, MIN=0, MAX=10000, max_subproc=4, daemonize=True):
+    def rid_cycle_slr(self, host, MIN=0, MAX=10000, verb=False, max_subproc=4, daemonize=True):
 
         DEFAULT_USERS = ["Administrator",
                     "Guest",
@@ -232,7 +231,7 @@ class Librarian:
 
 
         matches = {}
-        for i in range(MIN, MAX):
+        for i in range(MIN, (MAX + 1)):
             try:
                 HEX = hex(i)
                 if self.__verb:
@@ -241,7 +240,7 @@ class Librarian:
 
                 args = fr"rpcclient -W='' -U='' -N -c 'samlookuprids domain {HEX}' {host}"
                 resp = subprocess.check_output(shlex.split(args)).decode('utf-8')   
-
+                print(resp)
                 _resp = resp.split(" ")
                 matches[HEX] = _resp[2]
                 stdout.write(f"[+] Name: {_resp[2]} RID: {HEX}\n")
@@ -301,11 +300,11 @@ Examples:
         @click.option('-U','--user-list', 'userlist')
         @click.option('-u','--user')
         @click.option('-v','--verbose', 'verb', count=True)
-        @click.option('--daemons', type=click.INT)
-        @click.option('--start-rid-cycle', 'rid_start', type=click.INT, default=0)
-        @click.option('--stop-rid-cycle', 'rid_stop', type=click.INT, default=10000)
+        @click.option('--daemon-count', 'daemons', type=click.INT, default=4)
+        @click.option('--rid-cycle-start', 'rid_start', type=click.INT, default=0)
+        @click.option('--rid-cycle-stop', 'rid_stop', type=click.INT, default=10000)
         @click.option('--hash-dump', 'hashdump', count=True)
-        @click.argument('target_host')
+        @click.argument('target')
         def main(mode='', 
                 userlist='', 
                 user='', 
@@ -314,12 +313,14 @@ Examples:
                 rid_start=0,
                 rid_stop=10000,
                 hashdump=False, 
-                target_host=''):
+                target=''):
 
             show_banner()
-
-            ths = target_host.split(':')
-            host, port = ths[0], int(ths[1])
+            try:
+                ths = target.split(':')
+                host, port = ths[0], int(ths[1])
+            except IndexError:
+                host = target
             # print(host, port, verb, users)
             if mode == 'dict':
                 try:
@@ -349,20 +350,41 @@ Examples:
                 except FileNotFoundError as ferr:
                     stderr.write(f"[-] {ferr}\n")
             elif mode == 'cycle':
+
+                if not check_tool('rpcclient'):
+                    stderr.write("[-] 'rpcclient' not found in PATH\n")
+                    exit()
                 # handler = TransportHandlerFactory(host, port, bind_str=4, verb=verb)
                 # handler.connect()
                 # dce_handler = handler.bind(bind='samr')
-                librarian = Librarian(verb=True)
-                thread_name = host + '-daemon'
-                rid_start, rid_stop = 0, 0
-                stop_const = rip_stop / daemons
-                for range(0, daemons):
-                    start = 
-                daemonizer = LibrarianTaskDaemonizer(thread_name, librarian.rid_cycle_slr, daemons, [host])
-                daemonizer.spawn()
-                daemonizer.join()
+                librarian = Librarian(verb=verb)
+                stop_const = int(rid_stop / daemons)
+                spawned_daemons = []
+                for i in range(0, daemons):
+
+                    thread_name = host + f'-daemon{i}'
+                    daemonizer = LibrarianTaskDaemonizer(name=thread_name, 
+                                            func=librarian.rid_cycle_slr, 
+                                            max_subproc=daemons, 
+                                            args=[host,rid_start,rid_stop,verb])
+                    daemonizer.spawn()
+                    rid_start = rid_stop + 1
+                    rid_stop += stop_const
+                    spawned_daemons.append(daemonizer)
+
+                
+                for i, daemon in enumerate(spawned_daemons):
+                    daemon.join()
+                    
             else:
                 stderr.write("No user list found\n")
+
+                    # check if a tool is present on system
+        def check_tool(tool):
+
+            from shutil import which
+            return which(tool) is not None
+
         main()
 
 
