@@ -10,9 +10,10 @@
 # of any actions taken while using this software. The author accepts no liability for 
 # damage caused by this tool. 
 
-VERSION = '1.1.0'
+VERSION = '0.1.0'
 
 import shlex, subprocess, click, threading, re
+from pathlib import Path
 from sys import stdout, stderr, argv
 from contextlib import redirect_stdout
 from impacket.dcerpc.v5 import transport, lsat, lsad, samr
@@ -215,7 +216,7 @@ class Librarian:
     def rid_cycle(self, host):
         pass
     
-    def rid_cycle_slr(self, host, MIN=0, MAX=10000, verb=False, max_subproc=4, daemonize=True):
+    def rid_cycle_slr(self, host, MIN=0, MAX=10000, verb=False, max_subproc=4, daemonize=True, output=''):
 
         DEFAULT_USERS = ["Administrator",
                     "Guest",
@@ -229,7 +230,6 @@ class Librarian:
                     "guest",
                     "administrator"]
 
-
         matches = {}
         for i in range(MIN, (MAX + 1)):
             try:
@@ -240,18 +240,22 @@ class Librarian:
 
                 args = fr"rpcclient -W='' -U='' -N -c 'samlookuprids domain {HEX}' {host}"
                 resp = subprocess.check_output(shlex.split(args)).decode('utf-8')   
-                print(resp)
                 _resp = resp.split(" ")
                 matches[HEX] = _resp[2]
-                stdout.write(f"[+] Name: {_resp[2]} RID: {HEX}\n")
+                match = f"[+] Name: {_resp[2]} RID: {HEX}\n"
+                stdout.write(match)
+
+                if output:
+                    print(output)
+                    path = Path(fr'{output}')
+                    with open(path, 'w') as out:
+                        out.write(match)
             except:
                 pass
             finally: 
                 i+=1
-            
-        stdout.write("[*] RID matches:\n")
-        for key in matches.keys(): 
-            stdout.write(f"[*] RID: {key} Name: {matches[key]}")
+               
+        return matches
     
     # try:
     #response = lsad.hLsarOpenPolicy2(self.__dce_handler, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES, '80000000L')
@@ -264,10 +268,10 @@ if __name__ == "__main__":
 
     def show_banner():
         stdout.write(fr'''
-   ___ _ __ ___ | |__   ___ __ _| |_ 
-  / __| '_ ` _ \| '_ \ / __/ _` | __|
-  \__ \ | | | | | |_) | (__ (_| | |_ 
-  |___/_| |_| |_|_.__/ \___\__,_|\__|   
+    ___ _ __ ___ | |__   ___ __ _| |_ 
+   / __| '_ ` _ \| '_ \ / __/ _` | __|
+   \__ \ | | | | | |_) | (__ (_| | |_ 
+   |___/_| |_| |_|_.__/ \___\__,_|\__|   
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~           
   | GNU Public | by disastrpc | {VERSION} |'''+'\n')
 
@@ -283,13 +287,17 @@ Options:
                                     'dict'  => Dictionary attack. Must provie username list.
                                     'cycle' => Cycle domain RIDs. You can specifiy a max count
                                                to cycle on. Default is 10,000.
-    -U  --users <path>          =>  Specify user list
+    -U  --user-list <path>      =>  Specify user list
     -u  --user  <string>        =>  Specify a user
-    --max-rid-count <int>       =>  Specify max RID count to cycle until. For use with 'cycle' mode.
+    -o  --output <path>         =>  Output to file
+    --daemon-count  <int>       =>  Number of daemons to spawn for the specified operation
+    --rid-cycle-start <int>     =>  Start of RID cycle, if not specified default is 0.
+    --rid-cycle-stop <int>      =>  Specify max RID count to cycle until. Default is 10,000.
     -v  --verbose               =>  Be more verbose
 
 Examples:
     smbcat -m dict -v -U /root/users.txt 10.1.5.10:135
+    smbcat -m cycle --rid-cycle-start=5000 --rid-cycle-stop=30000 --daemon-count=5 10.12.154.10:139
         '''+'\n')
 
     if argv[1] in HELP_CONTEXT:
@@ -300,6 +308,7 @@ Examples:
         @click.option('-U','--user-list', 'userlist')
         @click.option('-u','--user')
         @click.option('-v','--verbose', 'verb', count=True)
+        @click.option('-o','--output')
         @click.option('--daemon-count', 'daemons', type=click.INT, default=4)
         @click.option('--rid-cycle-start', 'rid_start', type=click.INT, default=0)
         @click.option('--rid-cycle-stop', 'rid_stop', type=click.INT, default=10000)
@@ -309,6 +318,7 @@ Examples:
                 userlist='', 
                 user='', 
                 verb=False, 
+                output='',
                 daemons=1, 
                 rid_start=0,
                 rid_stop=10000,
@@ -321,12 +331,10 @@ Examples:
                 host, port = ths[0], int(ths[1])
             except IndexError:
                 host = target
-            # print(host, port, verb, users)
             if mode == 'dict':
                 try:
                     with open(userlist, 'r') as usersf:
                         userlist = usersf.readlines()
-            # print(host, port, verb, users)
                         handler = TransportHandlerFactory(host, port, verb=verb, bind_str=1)
                         handler.connect()
                         dce_handler = handler.bind(bind='rpc')
@@ -347,26 +355,37 @@ Examples:
 
                         # samr_librarian = Librarian(samr_handler, samr_dce_handler)
                         # samr_librarian.samr_dump()
+
                 except FileNotFoundError as ferr:
                     stderr.write(f"[-] {ferr}\n")
             elif mode == 'cycle':
+                
+                stdout.write("[*] Starting RID cycling\n")
+                stdout.write(f"[*] Daemon count: {daemons}\n")
+                stdout.write(f"[*] RID cycle start: {rid_start}\n")
+                stdout.write(f"[*] RID cycle stop: {rid_stop}\n")
 
+                # check if rpcclient is available
                 if not check_tool('rpcclient'):
-                    stderr.write("[-] 'rpcclient' not found in PATH\n")
+                    stderr.write("[-] rpcclient not found in PATH\n")
                     exit()
+
                 # handler = TransportHandlerFactory(host, port, bind_str=4, verb=verb)
                 # handler.connect()
                 # dce_handler = handler.bind(bind='samr')
                 librarian = Librarian(verb=verb)
                 stop_const = int(rid_stop / daemons)
                 spawned_daemons = []
+                rid_stop = rid_start + stop_const
                 for i in range(0, daemons):
 
                     thread_name = host + f'-daemon{i}'
+
                     daemonizer = LibrarianTaskDaemonizer(name=thread_name, 
                                             func=librarian.rid_cycle_slr, 
                                             max_subproc=daemons, 
-                                            args=[host,rid_start,rid_stop,verb])
+                                            args=[host,rid_start,rid_stop,verb,output])
+
                     daemonizer.spawn()
                     rid_start = rid_stop + 1
                     rid_stop += stop_const
