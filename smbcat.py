@@ -12,6 +12,11 @@
 
 VERSION = '0.1.0'
 
+try:
+    from Queue import Queue
+except ImportError:
+    from queue import Queue
+
 import shlex, subprocess, click, threading, re
 from pathlib import Path
 from sys import stdout, stderr, argv
@@ -115,6 +120,8 @@ class LibrarianTaskDaemonizer:
             self.__func = func
             self.__args = args
             self.__kwargs = kwargs
+            self.__queue = Queue()
+            self.__results = []
             self.__max_subproc = max_subproc
             self.__daemonize = daemonize
             self.__daemons = []
@@ -133,7 +140,7 @@ class LibrarianTaskDaemonizer:
             # spawn daemons
             for i in range(self.__max_subproc):
                 self.__daemon = threading.Thread(name=self.__name, 
-                                            target=self.__func, 
+                                            target=self.__queue.put(self.__func), 
                                             args=(self.__args,), 
                                             daemon=self.__daemonize)
 
@@ -149,6 +156,7 @@ class LibrarianTaskDaemonizer:
                                             target=self.__func,
                                             args=self.__args,
                                             daemon=self.__daemon)
+
             stdout.write(f"[*] Started daemon {self.__name}\n")
             return self.__daemon.start()
 
@@ -159,6 +167,13 @@ class LibrarianTaskDaemonizer:
 
             for i, thread in enumerate(self.__daemons):
                 thread.join()
+
+        def get(self):
+            while not self.__queue.empty():
+                result = self.__queue.get()
+                self.__results.append(result)
+            return self.__results
+                
         
 class Librarian:
 
@@ -216,7 +231,7 @@ class Librarian:
     def rid_cycle(self, host):
         pass
     
-    def rid_cycle_slr(self, host, MIN=0, MAX=10000, verb=False, max_subproc=4, daemonize=True, output=''):
+    def rid_cycle_slr(self, host, MIN=0, MAX=10000, verb=False, daemonize=True):
 
         DEFAULT_USERS = ["Administrator",
                     "Guest",
@@ -244,12 +259,6 @@ class Librarian:
                 matches[HEX] = _resp[2]
                 match = f"[+] Name: {_resp[2]} RID: {HEX}\n"
                 stdout.write(match)
-
-                if output:
-                    print(output)
-                    path = Path(fr'{output}')
-                    with open(path, 'w') as out:
-                        out.write(match)
             except:
                 pass
             finally: 
@@ -377,6 +386,7 @@ Examples:
                 stop_const = int(rid_stop / daemons)
                 spawned_daemons = []
                 rid_stop = rid_start + stop_const
+
                 for i in range(0, daemons):
 
                     thread_name = host + f'-daemon{i}'
@@ -384,16 +394,19 @@ Examples:
                     daemonizer = LibrarianTaskDaemonizer(name=thread_name, 
                                             func=librarian.rid_cycle_slr, 
                                             max_subproc=daemons, 
-                                            args=[host,rid_start,rid_stop,verb,output])
+                                            args=[host,rid_start,rid_stop,verb])
 
                     daemonizer.spawn()
                     rid_start = rid_stop + 1
                     rid_stop += stop_const
                     spawned_daemons.append(daemonizer)
 
-                
+                results = []
                 for i, daemon in enumerate(spawned_daemons):
                     daemon.join()
+                
+                results = daemonizer.get()
+                print(results)
                     
             else:
                 stderr.write("No user list found\n")
