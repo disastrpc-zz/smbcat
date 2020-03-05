@@ -5,10 +5,10 @@
 # GNU General Public License Ver 3
 # Tool for domain enumeration using RPC and lsat.
 
-# Disclaimer: 
+# Disclaimer:
 # This tool is intended for legal uses purposes only. The user takes full responsibility
-# of any actions taken while using this software. The author accepts no liability for 
-# damage caused by this tool. 
+# of any actions taken while using this software. The author accepts no liability for
+# damage caused by this tool.
 
 VERSION = '0.1.0'
 
@@ -81,7 +81,7 @@ class TransportHandlerFactory:
             stderr.write(f"[-] KeyError: {kerr}\n")
         except Exception as _except:
             stderr.write(f"[-] {_except}\n")
-      
+
     def bind(self, bind):
         # bind handler using LSAT or RPC
         try:
@@ -100,7 +100,7 @@ class TransportHandlerFactory:
             elif self.__bind == 'samr':
                 self.__dce.bind(samr.MSRPC_UUID_SAMR)
                 handle = samr.hSamrOpenDomain(self.__dce, self.__trans)
-            
+
             elif self.__bind == 'smb':
                 self.__dce.bind()
 
@@ -136,12 +136,12 @@ class LibrarianTaskDaemonizer:
 
             if self.__args and self.__kwargs:
                 stderr.write("[-] Error: Cannot provide args and kwargs together")
-                
+
             # spawn daemons
             for i in range(self.__max_subproc):
-                self.__daemon = threading.Thread(name=self.__name, 
-                                            target=self.__queue.put(self.__func), 
-                                            args=(self.__args,), 
+                self.__daemon = threading.Thread(name=self.__name,
+                                            target=self.__queue.put(self.__func),
+                                            args=(self.__args,),
                                             daemon=self.__daemonize)
 
                 self.__daemons.append(self.__daemon)
@@ -149,9 +149,9 @@ class LibrarianTaskDaemonizer:
                 stdout.write(f"[*] Started daemon in batch: {self.__name}\n")
 
             return self.__daemons
-        
+
         def spawn(self):
-            
+
             self.__daemon = threading.Thread(name=self.__name,
                                             target=self.__func,
                                             args=self.__args,
@@ -161,7 +161,7 @@ class LibrarianTaskDaemonizer:
             return self.__daemon.start()
 
 
-        def join(self, daemons=None): 
+        def join(self, daemons=None):
             if not daemons is None:
                  self.__daemons = daemons
 
@@ -173,8 +173,8 @@ class LibrarianTaskDaemonizer:
                 result = self.__queue.get()
                 self.__results.append(result)
             return self.__results
-                
-        
+
+
 class Librarian:
 
     ACCESS_MASK_DEF = '0x00000800'
@@ -182,8 +182,8 @@ class Librarian:
 
     def __init__(self, handler=None, dce_handler=None, verb=False):
         self.__handler = handler
-        self.__dce_handler = dce_handler     
-        self.__domain_name = '' 
+        self.__dce_handler = dce_handler
+        self.__domain_name = ''
         self.__verb = verb
         self.__daemonizer = None
 
@@ -199,38 +199,48 @@ class Librarian:
             'lsaquery': fr"rpcclient -W='' -U='' -N -I {host} -c 'lsaquery' 2>&1",
             'smbclient': fr"smbclient -W='' //{host}/ipc$ -U='' -c 'q' 2>&1"
         }
-
-        stdout.write("[*] Attempting LSA query on {host}")
-        # get domain name and SID
-        out = subprocess.check_output(shlex.split(args['lsaquery'])).decode('utf-8').split('\n')
-        self.__domain_name = out[0].split(':')
-        self.__domain_sid = out[1].split(':')
-        # out = subprocess.check_output(shlex.split(args['smbclient'])).decode('utf-8')
-        # print(out)
-        stdout.write("[*] Domain information: \n")
-        stdout.write(f"[+] Domain name:{self.__domain_name[1]}\n")
-        stdout.write(f"[+] Domain SID:{self.__domain_sid[1]}\n")
-
+        try:
+            stdout.write(f"[*] Attempting LSA query on {host}\n")
+            # get domain name and SID
+            out = subprocess.check_output(shlex.split(args['lsaquery'])).decode('utf-8').split('\n')
+            self.__domain_name = out[0].split(':')
+            self.__domain_sid = out[1].split(':')
+            # out = subprocess.check_output(shlex.split(args['smbclient'])).decode('utf-8')
+            # print(out)
+            stdout.write("[*] Domain information: \n")
+            stdout.write(f"[+] Domain name:{self.__domain_name[1]}\n")
+            stdout.write(f"[+] Domain SID:{self.__domain_sid[1]}\n")
+        except:
+            stdout.write("[-] Unable to perfom lsaquery\n")
 
     def get_dc_name_ext2(self, userlist, verbose):
 
         if type(userlist) is list:
 
-            stdout.write(f"[*] Found users: \n")
+            user_matches=[]
             for user in userlist:
-                user = user.strip()
+                user = user.strip().decode('utf-8', errors='replace')
                 try:
-                   hDsrGetDcNameEx2(self.__dce_handler,NULL,fr'{user}',512,NULL,NULL,NULL,0)              
+                   hDsrGetDcNameEx2(self.__dce_handler,NULL,fr'{user}\x00',512,NULL,NULL,NULL,0)
                 except:
                     if verbose:
                         stdout.write(f"[-] '{user}' not found\n")
                     pass
                 else:
+                    user_matches.append(user)
                     stdout.write(f"[+] '{user}' found on host\n")
+
+            if len(user_matches) != 0:
+                stdout.write("[+] Matches:")
+                for m in user_list:
+                    stdout.write(m+'\n')
+            else:
+                stdout.write("[-] No matches found\n")
+
 
     def rid_cycle(self, host):
         pass
-    
+
     def rid_cycle_slr(self, host, MIN=0, MAX=10000, verb=False, daemonize=True):
 
         DEFAULT_USERS = ["Administrator",
@@ -254,18 +264,18 @@ class Librarian:
                     stdout.write(f"[*] Cycling {HEX} curr:{i}\\start:{MIN}\\stop:{MAX} | {thread_name}\n")
 
                 args = fr"rpcclient -W='' -U='' -N -c 'samlookuprids domain {HEX}' {host}"
-                resp = subprocess.check_output(shlex.split(args)).decode('utf-8')   
+                resp = subprocess.check_output(shlex.split(args)).decode('utf-8')
                 _resp = resp.split(" ")
                 matches[HEX] = _resp[2]
                 match = f"[+] Name: {_resp[2]} RID: {HEX}\n"
                 stdout.write(match)
             except:
                 pass
-            finally: 
+            finally:
                 i+=1
-               
+
         return matches
-    
+
     # try:
     #response = lsad.hLsarOpenPolicy2(self.__dce_handler, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES, '80000000L')
     # except DCERPCException:
@@ -277,11 +287,11 @@ if __name__ == "__main__":
 
     def show_banner():
         stdout.write(fr'''
-    ___ _ __ ___ | |__   ___ __ _| |_ 
+    ___ _ __ ___ | |__   ___ __ _| |_
    / __| '_ ` _ \| '_ \ / __/ _` | __|
-   \__ \ | | | | | |_) | (__ (_| | |_ 
-   |___/_| |_| |_|_.__/ \___\__,_|\__|   
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~           
+   \__ \ | | | | | |_) | (__ (_| | |_
+   |___/_| |_| |_|_.__/ \___\__,_|\__|
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   | GNU Public | by disastrpc | {VERSION} |'''+'\n')
 
     def show_help():
@@ -323,15 +333,15 @@ Examples:
         @click.option('--rid-cycle-stop', 'rid_stop', type=click.INT, default=10000)
         @click.option('--hash-dump', 'hashdump', count=True)
         @click.argument('target')
-        def main(mode='', 
-                userlist='', 
-                user='', 
-                verb=False, 
+        def main(mode='',
+                userlist='',
+                user='',
+                verb=False,
                 output='',
-                daemons=1, 
+                daemons=1,
                 rid_start=0,
                 rid_stop=10000,
-                hashdump=False, 
+                hashdump=False,
                 target=''):
 
             show_banner()
@@ -342,16 +352,16 @@ Examples:
                 host = target
             if mode == 'dict':
                 try:
-                    with open(userlist, 'r') as usersf:
+                    with open(userlist, 'rb') as usersf:
                         userlist = usersf.readlines()
                         handler = TransportHandlerFactory(host, port, verb=verb, bind_str=1)
                         handler.connect()
                         dce_handler = handler.bind(bind='rpc')
 
                         if verb:
-                            verbose=True 
+                            verbose=True
                         else:
-                            verbose=False   
+                            verbose=False
 
                         rpc_librarian = Librarian(handler, dce_handler)
 
@@ -368,7 +378,7 @@ Examples:
                 except FileNotFoundError as ferr:
                     stderr.write(f"[-] {ferr}\n")
             elif mode == 'cycle':
-                
+
                 stdout.write("[*] Starting RID cycling\n")
                 stdout.write(f"[*] Daemon count: {daemons}\n")
                 stdout.write(f"[*] RID cycle start: {rid_start}\n")
@@ -391,9 +401,9 @@ Examples:
 
                     thread_name = host + f'-daemon{i}'
 
-                    daemonizer = LibrarianTaskDaemonizer(name=thread_name, 
-                                            func=librarian.rid_cycle_slr, 
-                                            max_subproc=daemons, 
+                    daemonizer = LibrarianTaskDaemonizer(name=thread_name,
+                                            func=librarian.rid_cycle_slr,
+                                            max_subproc=daemons,
                                             args=[host,rid_start,rid_stop,verb])
 
                     daemonizer.spawn()
@@ -404,10 +414,10 @@ Examples:
                 results = []
                 for i, daemon in enumerate(spawned_daemons):
                     daemon.join()
-                
+
                 results = daemonizer.get()
                 print(results)
-                    
+
             else:
                 stderr.write("No user list found\n")
 
@@ -418,8 +428,3 @@ Examples:
             return which(tool) is not None
 
         main()
-
-
-        
-
-
