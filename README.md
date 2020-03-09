@@ -6,19 +6,21 @@ Future features:
   - NT and NTLM hash dumps
   - LSAD SID cycling
 ```  
-Usage:
-     smbcat <options> <host:port>
-
+    Usage:
+        smbcat <options> <host:port> [Default: 135]
 Options:
     -m  --mode  <string>        =>  Specify the mode the program will use. Modes are:
-                                    'dict'  => Dictionary attack. Must provide username list.
-                                    'cycle' => Cycle user RIDs. You can specifiy a max count
+                                    'dict'  => Dictionary attack. Must provie username list.
+                                    'cycle' => Cycle domain RIDs. You can specifiy a max count
                                                to cycle on. Default is 10,000.
-    -U  --users <path>          =>  Specify user list
+    -U  --user-list <path>      =>  Specify user list
     -u  --user  <string>        =>  Specify a user
-    --max-rid-count <int>       =>  Specify max RID count to cycle until. For use with 'cycle' mode.
+    -o  --output <path>         =>  Output to file
+    --daemon-count  <int>       =>  Number of daemons to spawn for the specified operation
+    --rid-cycle-start <int>     =>  Start of RID cycle, if not specified default is 0.
+    --rid-cycle-stop <int>      =>  Specify max RID count to cycle until. Default is 10,000.
     -v  --verbose               =>  Be more verbose
-
 Examples:
     smbcat -m dict -v -U /root/users.txt 10.1.5.10:135
+    smbcat -m cycle --rid-cycle-start=5000 --rid-cycle-stop=30000 --daemon-count=5 10.12.154.10:139
 ```
