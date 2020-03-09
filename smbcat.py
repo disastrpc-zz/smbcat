@@ -21,6 +21,7 @@ import shlex, subprocess, click, threading, re
 from pathlib import Path
 from sys import stdout, stderr, argv
 from contextlib import redirect_stdout
+from impacket.dcerpc.v5.samr import NULL
 from impacket.dcerpc.v5 import transport, lsat, lsad, samr
 from impacket.dcerpc.v5.nrpc import MSRPC_UUID_NRPC,hDsrGetDcNameEx,hDsrGetDcNameEx2
 from impacket.dcerpc.v5.ndr import NDRCALL
@@ -62,7 +63,7 @@ class TransportHandlerFactory:
             if hasattr(self.__trans, 'set_credentials'):
                 if self.__verb:
                     stdout.write("[*] Set credentials to default values\n")
-                self.__trans.set_credentials('', '', 'WORKGROUP', '', '')
+                self.__trans.set_credentials('', '', 'WORKGROUP', '', '', '')
 
             # only use for SAMR bind strings
             if self.__bind_str == 4:
@@ -87,7 +88,7 @@ class TransportHandlerFactory:
         try:
             self.__bind = bind
             if self.__verb:
-                stdout.write(f"[*] Binding to {self.__bind}\n")
+                stdout.write(f"[*] Binding to {self.__bind.upper()}\n")
             self.__dce = self.__trans.get_dce_rpc()
             self.__dce.connect()
 
@@ -219,9 +220,9 @@ class Librarian:
 
             user_matches=[]
             for user in userlist:
-                user = user.strip().decode('utf-8', errors='replace')
+                user = str(user.rstrip())
                 try:
-                   hDsrGetDcNameEx2(self.__dce_handler,NULL,fr'{user}\x00',512,NULL,NULL,NULL,0)
+                    hDsrGetDcNameEx2(self.__dce_handler,NULL,'%s\x00' %user, 512, NULL, NULL,NULL, 0)
                 except:
                     if verbose:
                         stdout.write(f"[-] '{user}' not found\n")
@@ -231,15 +232,12 @@ class Librarian:
                     stdout.write(f"[+] '{user}' found on host\n")
 
             if len(user_matches) != 0:
-                stdout.write("[+] Matches:")
-                for m in user_list:
+                stdout.write("[+] Matches:\n")
+                for m in user_matches:
                     stdout.write(m+'\n')
             else:
                 stdout.write("[-] No matches found\n")
 
-
-    def rid_cycle(self, host):
-        pass
 
     def rid_cycle_slr(self, host, MIN=0, MAX=10000, verb=False, daemonize=True):
 
@@ -299,7 +297,7 @@ if __name__ == "__main__":
         stdout.write(r'''
 SMB enumeration tool built around the impacket package.
     Usage:
-        smbcat <options> <host:port>
+        smbcat <options> <host:port> [Default: 135]
 
 Options:
     -m  --mode  <string>        =>  Specify the mode the program will use. Modes are:
@@ -349,10 +347,13 @@ Examples:
                 ths = target.split(':')
                 host, port = ths[0], int(ths[1])
             except IndexError:
-                host = target
+                host, port = target, 135
             if mode == 'dict':
                 try:
-                    with open(userlist, 'rb') as usersf:
+                    with open(userlist, 'r') as usersf:
+                        
+                        if port is None:
+                            print('here')
                         userlist = usersf.readlines()
                         handler = TransportHandlerFactory(host, port, verb=verb, bind_str=1)
                         handler.connect()
