@@ -222,7 +222,7 @@ class Librarian:
             for user in userlist:
                 user = str(user.rstrip())
                 try:
-                    hDsrGetDcNameEx2(self.__dce_handler,NULL,'%s\x00' %user, 512, NULL, NULL,NULL, 0)
+                    hDsrGetDcNameEx2(self.__dce_handler,NULL,f'{user}\x00', 512, NULL, NULL,NULL, 0)
                 except:
                     if verbose:
                         stdout.write(f"[-] '{user}' not found\n")
