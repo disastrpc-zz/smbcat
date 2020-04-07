@@ -15,7 +15,7 @@ Planned features:
         smbcat <options> <host:port> [Default: 135]
 Options:
     -m  --mode  <string>        =>  Specify the mode the program will use. Modes are:
-                                    'dict'  => Dictionary attack. Must provie username list.
+                                    'dict'  => Dictionary attack. Must provide username list.
                                     'cycle' => Cycle domain RIDs. You can specifiy a max count
                                                to cycle on. Default is 10,000.
     -U  --user-list <path>      =>  Specify user list
