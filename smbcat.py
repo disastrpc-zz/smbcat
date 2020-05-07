@@ -6,7 +6,7 @@
 # Tool for domain enumeration using RPC and lsat.
 
 # Disclaimer:
-# This tool is intended for legal uses purposes only. The user takes full responsibility
+# This tool is intended for legal purposes only. The user takes full responsibility
 # of any actions taken while using this software. The author accepts no liability for
 # damage caused by this tool.
 
